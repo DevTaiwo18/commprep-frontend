@@ -98,16 +98,10 @@ const LandingPage = () => {
             </div>
             
             {/* Mobile Menu */}
-            <div className="md:hidden flex items-center space-x-2">
-              <button 
-                onClick={handleSignIn}
-                className="text-slate-600 hover:text-blue-600 transition-colors px-3 py-2 rounded-lg text-sm font-medium"
-              >
-                Sign In
-              </button>
+            <div className="md:hidden">
               <button 
                 onClick={handleGetStarted}
-                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-full text-sm hover:shadow-lg transition-all duration-300"
+                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-5 py-2 rounded-full text-sm hover:shadow-lg transition-all duration-300"
               >
                 Get Started
               </button>
@@ -136,13 +130,21 @@ const LandingPage = () => {
                 Get ready for interviews, presentations, and meetings with AI-powered practice sessions. Build confidence through personalized feedback and realistic scenarios.
               </p>
               
-              <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex flex-col gap-4">
                 <button 
                   onClick={handleGetStarted}
                   className="group bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-full font-semibold hover:shadow-xl transition-all duration-300 hover:scale-105 flex items-center justify-center text-sm sm:text-base"
                 >
                   Start Practicing Free
                   <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+                </button>
+                
+                {/* Mobile Sign In Button */}
+                <button 
+                  onClick={handleSignIn}
+                  className="md:hidden text-slate-600 hover:text-blue-600 transition-colors font-medium text-sm"
+                >
+                  Already have an account? Sign In
                 </button>
               </div>
             </div>

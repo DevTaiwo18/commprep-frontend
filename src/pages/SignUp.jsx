@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MessageCircle, Eye, EyeOff, ArrowLeft, Mail, Lock, User } from 'lucide-react';
 
 const SignUp = () => {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -79,11 +81,11 @@ const SignUp = () => {
   };
 
   const handleBackToHome = () => {
-    window.location.href = '/';
+    navigate('/');
   };
 
   const handleGoToSignIn = () => {
-    window.location.href = '/signin';
+    navigate('/signin');
   };
 
   return (
