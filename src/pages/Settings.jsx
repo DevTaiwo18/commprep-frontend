@@ -1,9 +1,7 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { MessageCircle, ArrowLeft, User, Bell, Shield, Palette, Download, Trash2, Save } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { MessageCircle, ArrowLeft, User, Bell, Download, Trash2, Save, Check, AlertCircle } from 'lucide-react';
 
 const Settings = () => {
-  const navigate = useNavigate();
   const [settings, setSettings] = useState({
     // Profile settings
     fullName: 'Alex Johnson',
@@ -12,46 +10,96 @@ const Settings = () => {
     // Notification settings
     emailNotifications: true,
     sessionReminders: true,
-    weeklyReports: false,
-    
-    // Privacy settings
-    dataCollection: true,
-    shareProgress: false,
-    
-    // Appearance settings
-    theme: 'light',
-    language: 'english'
+    weeklyReports: false
   });
 
   const [activeTab, setActiveTab] = useState('profile');
   const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [errors, setErrors] = useState({});
+
+  // Load settings from localStorage on component mount
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('commprep_settings');
+    if (savedSettings) {
+      try {
+        const parsed = JSON.parse(savedSettings);
+        setSettings(prev => ({ ...prev, ...parsed }));
+      } catch (error) {
+        console.error('Error loading settings:', error);
+      }
+    }
+  }, []);
+
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validateSettings = () => {
+    const newErrors = {};
+    
+    if (!settings.fullName.trim()) {
+      newErrors.fullName = 'Full name is required';
+    }
+    
+    if (!settings.email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!validateEmail(settings.email)) {
+      newErrors.email = 'Please enter a valid email address';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleSettingChange = (key, value) => {
     setSettings(prev => ({
       ...prev,
       [key]: value
     }));
+    
+    // Clear error for this field if it exists
+    if (errors[key]) {
+      setErrors(prev => ({
+        ...prev,
+        [key]: ''
+      }));
+    }
   };
 
   const handleSave = () => {
+    if (!validateSettings()) {
+      return;
+    }
+
     setIsSaving(true);
+    setSaveSuccess(false);
+    
     // Simulate saving to localStorage or API
     setTimeout(() => {
       localStorage.setItem('commprep_settings', JSON.stringify(settings));
       setIsSaving(false);
-      // Could show a toast notification here
+      setSaveSuccess(true);
+      
+      // Hide success message after 3 seconds
+      setTimeout(() => {
+        setSaveSuccess(false);
+      }, 3000);
     }, 1000);
   };
 
   const handleBackToDashboard = () => {
-    navigate('/dashboard');
+    // You can replace this with your actual navigation logic
+    window.history.back();
   };
 
   const handleExportData = () => {
     const userData = {
       settings,
       sessions: JSON.parse(localStorage.getItem('commprep_sessions') || '[]'),
-      user: JSON.parse(localStorage.getItem('commprep_user') || '{}')
+      user: JSON.parse(localStorage.getItem('commprep_user') || '{}'),
+      exportDate: new Date().toISOString()
     };
     
     const dataStr = JSON.stringify(userData, null, 2);
@@ -60,7 +108,7 @@ const Settings = () => {
     
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'commprep-data.json';
+    link.download = `commprep-data-${new Date().toISOString().split('T')[0]}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -68,47 +116,78 @@ const Settings = () => {
   };
 
   const handleDeleteAccount = () => {
-    if (window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+    const confirmText = 'DELETE';
+    const userInput = window.prompt(
+      `This action cannot be undone. All your data will be permanently deleted.\n\nType "${confirmText}" to confirm account deletion:`
+    );
+    
+    if (userInput === confirmText) {
       localStorage.clear();
-      navigate('/');
+      alert('Your account has been deleted successfully.');
+      // Navigate to home page using window.location
+      window.location.href = '/';
+    } else if (userInput !== null) {
+      alert('Account deletion cancelled. Please type "DELETE" exactly to confirm.');
     }
   };
 
   const tabs = [
     { id: 'profile', label: 'Profile', icon: <User className="w-4 h-4" /> },
-    { id: 'notifications', label: 'Notifications', icon: <Bell className="w-4 h-4" /> },
-    { id: 'privacy', label: 'Privacy', icon: <Shield className="w-4 h-4" /> },
-    { id: 'appearance', label: 'Appearance', icon: <Palette className="w-4 h-4" /> }
+    { id: 'notifications', label: 'Notifications', icon: <Bell className="w-4 h-4" /> }
   ];
 
   const ProfileSettings = () => (
     <div className="space-y-6">
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-2">Full Name</label>
-        <input
-          type="text"
-          value={settings.fullName}
-          onChange={(e) => handleSettingChange('fullName', e.target.value)}
-          className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">
+            Full Name *
+          </label>
+          <input
+            type="text"
+            value={settings.fullName}
+            onChange={(e) => handleSettingChange('fullName', e.target.value)}
+            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+              errors.fullName ? 'border-red-500' : 'border-slate-300'
+            }`}
+            placeholder="Enter your full name"
+          />
+          {errors.fullName && (
+            <p className="mt-1 text-sm text-red-600 flex items-center">
+              <AlertCircle className="w-4 h-4 mr-1" />
+              {errors.fullName}
+            </p>
+          )}
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">
+            Email Address *
+          </label>
+          <input
+            type="email"
+            value={settings.email}
+            onChange={(e) => handleSettingChange('email', e.target.value)}
+            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+              errors.email ? 'border-red-500' : 'border-slate-300'
+            }`}
+            placeholder="Enter your email address"
+          />
+          {errors.email && (
+            <p className="mt-1 text-sm text-red-600 flex items-center">
+              <AlertCircle className="w-4 h-4 mr-1" />
+              {errors.email}
+            </p>
+          )}
+        </div>
       </div>
       
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-2">Email Address</label>
-        <input
-          type="email"
-          value={settings.email}
-          onChange={(e) => handleSettingChange('email', e.target.value)}
-          className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        />
-      </div>
-      
-      <div className="pt-4 border-t border-slate-200">
-        <h3 className="text-lg font-medium text-slate-900 mb-4">Account Actions</h3>
-        <div className="space-y-4">
+      <div className="pt-6 border-t border-slate-200">
+        <h3 className="text-lg font-semibold text-slate-900 mb-4">Account Actions</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <button
             onClick={handleExportData}
-            className="flex items-center px-4 py-2 text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors"
+            className="flex items-center justify-center px-4 py-3 text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
           >
             <Download className="w-4 h-4 mr-2" />
             Export My Data
@@ -116,7 +195,7 @@ const Settings = () => {
           
           <button
             onClick={handleDeleteAccount}
-            className="flex items-center px-4 py-2 text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
+            className="flex items-center justify-center px-4 py-3 text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
           >
             <Trash2 className="w-4 h-4 mr-2" />
             Delete Account
@@ -128,150 +207,63 @@ const Settings = () => {
 
   const NotificationSettings = () => (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="font-medium text-slate-900">Email Notifications</div>
-          <div className="text-sm text-slate-600">Receive updates and session summaries via email</div>
-        </div>
-        <button
-          onClick={() => handleSettingChange('emailNotifications', !settings.emailNotifications)}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-            settings.emailNotifications ? 'bg-blue-600' : 'bg-slate-300'
-          }`}
-        >
-          <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-              settings.emailNotifications ? 'translate-x-6' : 'translate-x-1'
-            }`}
-          />
-        </button>
-      </div>
-      
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="font-medium text-slate-900">Session Reminders</div>
-          <div className="text-sm text-slate-600">Get reminded to practice regularly</div>
-        </div>
-        <button
-          onClick={() => handleSettingChange('sessionReminders', !settings.sessionReminders)}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-            settings.sessionReminders ? 'bg-blue-600' : 'bg-slate-300'
-          }`}
-        >
-          <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-              settings.sessionReminders ? 'translate-x-6' : 'translate-x-1'
-            }`}
-          />
-        </button>
-      </div>
-      
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="font-medium text-slate-900">Weekly Reports</div>
-          <div className="text-sm text-slate-600">Receive weekly progress summaries</div>
-        </div>
-        <button
-          onClick={() => handleSettingChange('weeklyReports', !settings.weeklyReports)}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-            settings.weeklyReports ? 'bg-blue-600' : 'bg-slate-300'
-          }`}
-        >
-          <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-              settings.weeklyReports ? 'translate-x-6' : 'translate-x-1'
-            }`}
-          />
-        </button>
-      </div>
-    </div>
-  );
-
-  const PrivacySettings = () => (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="font-medium text-slate-900">Analytics & Improvement</div>
-          <div className="text-sm text-slate-600">Help us improve CommPrep with anonymous usage data</div>
-        </div>
-        <button
-          onClick={() => handleSettingChange('dataCollection', !settings.dataCollection)}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-            settings.dataCollection ? 'bg-blue-600' : 'bg-slate-300'
-          }`}
-        >
-          <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-              settings.dataCollection ? 'translate-x-6' : 'translate-x-1'
-            }`}
-          />
-        </button>
-      </div>
-      
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="font-medium text-slate-900">Share Progress</div>
-          <div className="text-sm text-slate-600">Allow progress sharing with coaches or team members</div>
-        </div>
-        <button
-          onClick={() => handleSettingChange('shareProgress', !settings.shareProgress)}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-            settings.shareProgress ? 'bg-blue-600' : 'bg-slate-300'
-          }`}
-        >
-          <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-              settings.shareProgress ? 'translate-x-6' : 'translate-x-1'
-            }`}
-          />
-        </button>
-      </div>
-    </div>
-  );
-
-  const AppearanceSettings = () => (
-    <div className="space-y-6">
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-3">Theme</label>
-        <div className="grid grid-cols-2 gap-4">
+      <div className="space-y-4">
+        <div className="flex items-center justify-between py-3">
+          <div className="flex-1">
+            <div className="font-medium text-slate-900">Email Notifications</div>
+            <div className="text-sm text-slate-600">Receive session results and updates via email</div>
+          </div>
           <button
-            onClick={() => handleSettingChange('theme', 'light')}
-            className={`p-4 border-2 rounded-lg transition-colors ${
-              settings.theme === 'light' 
-                ? 'border-blue-500 bg-blue-50' 
-                : 'border-slate-300 hover:border-slate-400'
+            onClick={() => handleSettingChange('emailNotifications', !settings.emailNotifications)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+              settings.emailNotifications ? 'bg-blue-600' : 'bg-slate-300'
             }`}
           >
-            <div className="w-full h-16 bg-white rounded mb-2 border border-slate-200"></div>
-            <div className="text-sm font-medium">Light</div>
-          </button>
-          
-          <button
-            onClick={() => handleSettingChange('theme', 'dark')}
-            className={`p-4 border-2 rounded-lg transition-colors ${
-              settings.theme === 'dark' 
-                ? 'border-blue-500 bg-blue-50' 
-                : 'border-slate-300 hover:border-slate-400'
-            }`}
-          >
-            <div className="w-full h-16 bg-slate-800 rounded mb-2"></div>
-            <div className="text-sm font-medium">Dark</div>
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                settings.emailNotifications ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
           </button>
         </div>
-      </div>
-      
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-2">Language</label>
-        <select
-          value={settings.language}
-          onChange={(e) => handleSettingChange('language', e.target.value)}
-          className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        >
-          <option value="english">English</option>
-          <option value="spanish">Español</option>
-          <option value="french">Français</option>
-          <option value="german">Deutsch</option>
-        </select>
+        
+        <div className="flex items-center justify-between py-3">
+          <div className="flex-1">
+            <div className="font-medium text-slate-900">Session Reminders</div>
+            <div className="text-sm text-slate-600">Get reminders when you need more practice on specific topics</div>
+          </div>
+          <button
+            onClick={() => handleSettingChange('sessionReminders', !settings.sessionReminders)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+              settings.sessionReminders ? 'bg-blue-600' : 'bg-slate-300'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                settings.sessionReminders ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+        
+        <div className="flex items-center justify-between py-3">
+          <div className="flex-1">
+            <div className="font-medium text-slate-900">Weekly Reports</div>
+            <div className="text-sm text-slate-600">Receive weekly overall progress summaries</div>
+          </div>
+          <button
+            onClick={() => handleSettingChange('weeklyReports', !settings.weeklyReports)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+              settings.weeklyReports ? 'bg-blue-600' : 'bg-slate-300'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                settings.weeklyReports ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -308,8 +300,16 @@ const Settings = () => {
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900 mb-2">Settings</h1>
-          <p className="text-slate-600">Manage your account preferences and privacy settings</p>
+          <p className="text-slate-600">Manage your account preferences and notification settings</p>
         </div>
+
+        {/* Success Message */}
+        {saveSuccess && (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center">
+            <Check className="w-5 h-5 text-green-600 mr-2" />
+            <span className="text-green-800">Settings saved successfully!</span>
+          </div>
+        )}
 
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
           {/* Tabs */}
@@ -336,8 +336,6 @@ const Settings = () => {
           <div className="p-6">
             {activeTab === 'profile' && <ProfileSettings />}
             {activeTab === 'notifications' && <NotificationSettings />}
-            {activeTab === 'privacy' && <PrivacySettings />}
-            {activeTab === 'appearance' && <AppearanceSettings />}
           </div>
         </div>
 
@@ -346,7 +344,7 @@ const Settings = () => {
           <button
             onClick={handleSave}
             disabled={isSaving}
-            className="flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all duration-300 disabled:opacity-50"
+            className="flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSaving ? (
               <>
