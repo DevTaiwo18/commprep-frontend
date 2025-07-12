@@ -9,6 +9,8 @@ import Interviewee from './pages/Interviewee'
 import Presenter from './pages/Presenter'
 import Interviewer from './pages/Interviewer'
 import MeetingPrep from './pages/MeetingPrep'
+import Settings from './pages/Settings'
+import Sessions from './pages/Sessions'
 import NotFound from './pages/NotFound'
 
 const App = () => {
@@ -27,6 +29,10 @@ const App = () => {
         <Route path="/presenter" element={<Presenter />} />
         <Route path="/interviewer" element={<Interviewer />} />
         <Route path="/meeting-prep" element={<MeetingPrep />} />
+        
+        {/* Settings and Session Management */}
+        <Route path="/settings" element={<Settings />} />
+        <Route path="/sessions" element={<Sessions />} />
         
         {/* Catch all route */}
         <Route path="*" element={<NotFound />} />
