@@ -9,14 +9,6 @@ Frontend application for **CommPrep** — a personal AI-powered communication, i
 - Vite
 - ESLint & Prettier
 
-## 💡 Features
-
-- Landing page and role-based onboarding
-- Authentication UI (login & signup screens)
-- Dashboard and role selection (Interviewee, Presenter, Interviewer, Meeting Prep)
-- Interactive practice flows
-- Connected to live backend API (Node.js, Express, MongoDB)
-
 ## 🛠️ Setup
 
 ```bash
