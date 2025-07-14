@@ -2,14 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MessageCircle, Plus, Clock, TrendingUp, User, Settings, LogOut, Menu, X } from 'lucide-react';
 
-// Mock data for demonstration
-const mockUser = {
-  name: "Alex Johnson",
-  email: "alex@example.com",
-  avatar: null,
-  joinDate: "January 2025"
-};
-
 const mockStats = {
   totalSessions: 12,
   hourspracticed: 8.5,
@@ -87,11 +79,20 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedSession, setSelectedSession] = useState(null);
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const userData = localStorage.getItem('user') || sessionStorage.getItem('user');
+    if (userData) {
+      setUser(JSON.parse(userData));
+    } else {
+      navigate('/signin');
+    }
+  }, [navigate]);
 
   const handleSessionSelect = (sessionType) => {
     setSelectedSession(sessionType);
     
-    // Navigate to the appropriate page based on session type
     switch (sessionType.id) {
       case 'interview':
         navigate('/interviewee');
@@ -111,21 +112,32 @@ const Dashboard = () => {
   };
 
   const handleSignOut = () => {
-    // Clear any stored user data
-    localStorage.removeItem('commprep_user');
-    localStorage.removeItem('commprep_sessions');
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
     
-    // Navigate back to landing page
     navigate('/');
   };
 
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+            <MessageCircle className="w-8 h-8 text-white" />
+          </div>
+          <div className="text-lg text-slate-600">Loading...</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-      {/* Header */}
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-200/50 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            {/* Logo - clickable to dashboard */}
             <div 
               onClick={() => navigate('/dashboard')}
               className="flex items-center space-x-2 cursor-pointer"
@@ -138,14 +150,13 @@ const Dashboard = () => {
               </span>
             </div>
 
-            {/* Desktop User Menu */}
             <div className="hidden md:flex items-center space-x-4">
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold">
-                  {mockUser.name[0]}
+                  {user.fullName[0]}
                 </div>
                 <div className="text-sm">
-                  <div className="font-medium text-slate-900">{mockUser.name}</div>
+                  <div className="font-medium text-slate-900">{user.fullName}</div>
                   <div className="text-slate-500">Welcome back!</div>
                 </div>
               </div>
@@ -165,7 +176,6 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Mobile Menu Button */}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className="md:hidden p-2 text-slate-600 hover:text-blue-600 transition-colors"
@@ -175,17 +185,16 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Mobile Menu */}
         {isMobileMenuOpen && (
           <div className="md:hidden bg-white border-t border-slate-200">
             <div className="px-4 py-4 space-y-4">
               <div className="flex items-center space-x-3 pb-4 border-b border-slate-200">
                 <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold">
-                  {mockUser.name[0]}
+                  {user.fullName[0]}
                 </div>
                 <div>
-                  <div className="font-medium text-slate-900">{mockUser.name}</div>
-                  <div className="text-sm text-slate-500">{mockUser.email}</div>
+                  <div className="font-medium text-slate-900">{user.fullName}</div>
+                  <div className="text-sm text-slate-500">{user.email}</div>
                 </div>
               </div>
               <button 
@@ -207,19 +216,16 @@ const Dashboard = () => {
         )}
       </header>
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Welcome Section */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900 mb-2">
-            Welcome back, {mockUser.name.split(' ')[0]}! 👋
+            Welcome back, {user.fullName.split(' ')[0]}! 👋
           </h1>
           <p className="text-slate-600">
             Ready to practice and improve your communication skills? Let's get started.
           </p>
         </div>
 
-        {/* Quick Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
             <div className="text-2xl font-bold text-slate-900">{mockStats.totalSessions}</div>
@@ -239,7 +245,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Session Types */}
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-slate-900 mb-6">Choose Your Practice Mode</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -263,7 +268,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Recent Sessions */}
         <div>
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-slate-900">Recent Sessions</h2>

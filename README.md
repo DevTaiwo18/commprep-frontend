@@ -13,9 +13,9 @@ Frontend application for **CommPrep** — a personal AI-powered communication, i
 
 - Landing page and role-based onboarding
 - Authentication UI (login & signup screens)
-- Role selection (Interviewee, Presenter, Interviewer, Meeting Prep)
+- Dashboard and role selection (Interviewee, Presenter, Interviewer, Meeting Prep)
 - Interactive practice flows
-- Using mock data for now (will connect to backend soon)
+- Connected to live backend API (Node.js, Express, MongoDB)
 
 ## 🛠️ Setup
 
