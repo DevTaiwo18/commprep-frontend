@@ -1,51 +1,82 @@
 import React, { useState, useEffect } from 'react';
-import { MessageCircle, ArrowLeft, User, Bell, Download, Trash2, Save, Check, AlertCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { MessageCircle, ArrowLeft, Edit, Save, Check, AlertCircle } from 'lucide-react';
 
 const Settings = () => {
-  const [settings, setSettings] = useState({
-    // Profile settings
-    fullName: 'Alex Johnson',
-    email: 'alex@example.com',
-    
-    // Notification settings
-    emailNotifications: true,
-    sessionReminders: true,
-    weeklyReports: false
+  const navigate = useNavigate();
+  const [profile, setProfile] = useState({
+    fullName: '',
+    email: ''
   });
-
-  const [activeTab, setActiveTab] = useState('profile');
+  const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(true);
 
-  // Load settings from localStorage on component mount
-  useEffect(() => {
-    const savedSettings = localStorage.getItem('commprep_settings');
-    if (savedSettings) {
-      try {
-        const parsed = JSON.parse(savedSettings);
-        setSettings(prev => ({ ...prev, ...parsed }));
-      } catch (error) {
-        console.error('Error loading settings:', error);
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+  
+  const apiCall = async (endpoint, options = {}) => {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...options.headers
+      },
+      ...options
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        navigate('/signin');
+        return;
       }
+      throw new Error(`API call failed: ${response.statusText}`);
     }
-  }, []);
+
+    return await response.json();
+  };
+
+  const fetchUserProfile = async () => {
+    try {
+      setLoading(true);
+      const userData = await apiCall('/users/profile');
+      setProfile({
+        fullName: userData.fullName || '',
+        email: userData.email || ''
+      });
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (!token) {
+      navigate('/signin');
+      return;
+    }
+    fetchUserProfile();
+  }, [navigate]);
 
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
   };
 
-  const validateSettings = () => {
+  const validateProfile = () => {
     const newErrors = {};
     
-    if (!settings.fullName.trim()) {
+    if (!profile.fullName.trim()) {
       newErrors.fullName = 'Full name is required';
     }
     
-    if (!settings.email.trim()) {
+    if (!profile.email.trim()) {
       newErrors.email = 'Email is required';
-    } else if (!validateEmail(settings.email)) {
+    } else if (!validateEmail(profile.email)) {
       newErrors.email = 'Please enter a valid email address';
     }
     
@@ -53,13 +84,12 @@ const Settings = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSettingChange = (key, value) => {
-    setSettings(prev => ({
+  const handleInputChange = (key, value) => {
+    setProfile(prev => ({
       ...prev,
       [key]: value
     }));
     
-    // Clear error for this field if it exists
     if (errors[key]) {
       setErrors(prev => ({
         ...prev,
@@ -68,209 +98,66 @@ const Settings = () => {
     }
   };
 
-  const handleSave = () => {
-    if (!validateSettings()) {
+  const handleEdit = () => {
+    setIsEditing(true);
+    setErrors({});
+  };
+
+  const handleSave = async () => {
+    if (!validateProfile()) {
       return;
     }
 
     setIsSaving(true);
     setSaveSuccess(false);
     
-    // Simulate saving to localStorage or API
-    setTimeout(() => {
-      localStorage.setItem('commprep_settings', JSON.stringify(settings));
-      setIsSaving(false);
+    try {
+      await apiCall('/users/profile', {
+        method: 'PUT',
+        body: JSON.stringify(profile)
+      });
+
       setSaveSuccess(true);
+      setIsEditing(false);
       
-      // Hide success message after 3 seconds
+      localStorage.setItem('user', JSON.stringify(profile));
+      
       setTimeout(() => {
         setSaveSuccess(false);
       }, 3000);
-    }, 1000);
-  };
-
-  const handleBackToDashboard = () => {
-    // You can replace this with your actual navigation logic
-    window.history.back();
-  };
-
-  const handleExportData = () => {
-    const userData = {
-      settings,
-      sessions: JSON.parse(localStorage.getItem('commprep_sessions') || '[]'),
-      user: JSON.parse(localStorage.getItem('commprep_user') || '{}'),
-      exportDate: new Date().toISOString()
-    };
-    
-    const dataStr = JSON.stringify(userData, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `commprep-data-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleDeleteAccount = () => {
-    const confirmText = 'DELETE';
-    const userInput = window.prompt(
-      `This action cannot be undone. All your data will be permanently deleted.\n\nType "${confirmText}" to confirm account deletion:`
-    );
-    
-    if (userInput === confirmText) {
-      localStorage.clear();
-      alert('Your account has been deleted successfully.');
-      // Navigate to home page using window.location
-      window.location.href = '/';
-    } else if (userInput !== null) {
-      alert('Account deletion cancelled. Please type "DELETE" exactly to confirm.');
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      setErrors({ general: 'Failed to update profile. Please try again.' });
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const tabs = [
-    { id: 'profile', label: 'Profile', icon: <User className="w-4 h-4" /> },
-    { id: 'notifications', label: 'Notifications', icon: <Bell className="w-4 h-4" /> }
-  ];
+  const handleCancel = () => {
+    setIsEditing(false);
+    setErrors({});
+    fetchUserProfile();
+  };
 
-  const ProfileSettings = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">
-            Full Name *
-          </label>
-          <input
-            type="text"
-            value={settings.fullName}
-            onChange={(e) => handleSettingChange('fullName', e.target.value)}
-            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-              errors.fullName ? 'border-red-500' : 'border-slate-300'
-            }`}
-            placeholder="Enter your full name"
-          />
-          {errors.fullName && (
-            <p className="mt-1 text-sm text-red-600 flex items-center">
-              <AlertCircle className="w-4 h-4 mr-1" />
-              {errors.fullName}
-            </p>
-          )}
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">
-            Email Address *
-          </label>
-          <input
-            type="email"
-            value={settings.email}
-            onChange={(e) => handleSettingChange('email', e.target.value)}
-            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-              errors.email ? 'border-red-500' : 'border-slate-300'
-            }`}
-            placeholder="Enter your email address"
-          />
-          {errors.email && (
-            <p className="mt-1 text-sm text-red-600 flex items-center">
-              <AlertCircle className="w-4 h-4 mr-1" />
-              {errors.email}
-            </p>
-          )}
-        </div>
-      </div>
-      
-      <div className="pt-6 border-t border-slate-200">
-        <h3 className="text-lg font-semibold text-slate-900 mb-4">Account Actions</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <button
-            onClick={handleExportData}
-            className="flex items-center justify-center px-4 py-3 text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Export My Data
-          </button>
-          
-          <button
-            onClick={handleDeleteAccount}
-            className="flex items-center justify-center px-4 py-3 text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            Delete Account
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  const handleBackToDashboard = () => {
+    navigate('/dashboard');
+  };
 
-  const NotificationSettings = () => (
-    <div className="space-y-6">
-      <div className="space-y-4">
-        <div className="flex items-center justify-between py-3">
-          <div className="flex-1">
-            <div className="font-medium text-slate-900">Email Notifications</div>
-            <div className="text-sm text-slate-600">Receive session results and updates via email</div>
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+            <MessageCircle className="w-8 h-8 text-white" />
           </div>
-          <button
-            onClick={() => handleSettingChange('emailNotifications', !settings.emailNotifications)}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-              settings.emailNotifications ? 'bg-blue-600' : 'bg-slate-300'
-            }`}
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                settings.emailNotifications ? 'translate-x-6' : 'translate-x-1'
-              }`}
-            />
-          </button>
-        </div>
-        
-        <div className="flex items-center justify-between py-3">
-          <div className="flex-1">
-            <div className="font-medium text-slate-900">Session Reminders</div>
-            <div className="text-sm text-slate-600">Get reminders when you need more practice on specific topics</div>
-          </div>
-          <button
-            onClick={() => handleSettingChange('sessionReminders', !settings.sessionReminders)}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-              settings.sessionReminders ? 'bg-blue-600' : 'bg-slate-300'
-            }`}
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                settings.sessionReminders ? 'translate-x-6' : 'translate-x-1'
-              }`}
-            />
-          </button>
-        </div>
-        
-        <div className="flex items-center justify-between py-3">
-          <div className="flex-1">
-            <div className="font-medium text-slate-900">Weekly Reports</div>
-            <div className="text-sm text-slate-600">Receive weekly overall progress summaries</div>
-          </div>
-          <button
-            onClick={() => handleSettingChange('weeklyReports', !settings.weeklyReports)}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-              settings.weeklyReports ? 'bg-blue-600' : 'bg-slate-300'
-            }`}
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                settings.weeklyReports ? 'translate-x-6' : 'translate-x-1'
-              }`}
-            />
-          </button>
+          <div className="text-lg text-slate-600">Loading profile...</div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-      {/* Header */}
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-200/50 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
@@ -296,68 +183,121 @@ const Settings = () => {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">Settings</h1>
-          <p className="text-slate-600">Manage your account preferences and notification settings</p>
+          <h1 className="text-3xl font-bold text-slate-900 mb-2">Profile Settings</h1>
+          <p className="text-slate-600">Manage your account information</p>
         </div>
 
-        {/* Success Message */}
         {saveSuccess && (
           <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center">
             <Check className="w-5 h-5 text-green-600 mr-2" />
-            <span className="text-green-800">Settings saved successfully!</span>
+            <span className="text-green-800">Profile updated successfully!</span>
           </div>
         )}
 
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
-          {/* Tabs */}
-          <div className="border-b border-slate-200">
-            <nav className="flex space-x-8 px-6 overflow-x-auto">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center space-x-2 py-4 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
-                    activeTab === tab.id
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  {tab.icon}
-                  <span>{tab.label}</span>
-                </button>
-              ))}
-            </nav>
+        {errors.general && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center">
+            <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
+            <span className="text-red-800">{errors.general}</span>
           </div>
+        )}
 
-          {/* Tab Content */}
-          <div className="p-6">
-            {activeTab === 'profile' && <ProfileSettings />}
-            {activeTab === 'notifications' && <NotificationSettings />}
-          </div>
-        </div>
-
-        {/* Save Button */}
-        <div className="mt-8 flex justify-end">
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSaving ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4 mr-2" />
-                Save Changes
-              </>
+        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold text-slate-900">Personal Information</h2>
+            {!isEditing && (
+              <button
+                onClick={handleEdit}
+                className="flex items-center px-4 py-2 text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+              >
+                <Edit className="w-4 h-4 mr-2" />
+                Edit
+              </button>
             )}
-          </button>
+          </div>
+
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Full Name
+              </label>
+              <input
+                type="text"
+                value={profile.fullName}
+                onChange={(e) => handleInputChange('fullName', e.target.value)}
+                disabled={!isEditing}
+                className={`w-full px-4 py-3 border rounded-lg transition-colors ${
+                  isEditing
+                    ? errors.fullName
+                      ? 'border-red-500 focus:ring-2 focus:ring-red-500 focus:border-transparent'
+                      : 'border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+                    : 'border-slate-200 bg-slate-50'
+                } ${!isEditing ? 'cursor-not-allowed' : ''}`}
+                placeholder="Enter your full name"
+              />
+              {errors.fullName && (
+                <p className="mt-1 text-sm text-red-600 flex items-center">
+                  <AlertCircle className="w-4 h-4 mr-1" />
+                  {errors.fullName}
+                </p>
+              )}
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Email Address
+              </label>
+              <input
+                type="email"
+                value={profile.email}
+                onChange={(e) => handleInputChange('email', e.target.value)}
+                disabled={!isEditing}
+                className={`w-full px-4 py-3 border rounded-lg transition-colors ${
+                  isEditing
+                    ? errors.email
+                      ? 'border-red-500 focus:ring-2 focus:ring-red-500 focus:border-transparent'
+                      : 'border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+                    : 'border-slate-200 bg-slate-50'
+                } ${!isEditing ? 'cursor-not-allowed' : ''}`}
+                placeholder="Enter your email address"
+              />
+              {errors.email && (
+                <p className="mt-1 text-sm text-red-600 flex items-center">
+                  <AlertCircle className="w-4 h-4 mr-1" />
+                  {errors.email}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {isEditing && (
+            <div className="flex justify-end space-x-3 mt-6 pt-6 border-t border-slate-200">
+              <button
+                onClick={handleCancel}
+                className="px-4 py-2 text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSaving ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Save Changes
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       </main>
     </div>

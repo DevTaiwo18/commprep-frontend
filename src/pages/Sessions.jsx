@@ -9,26 +9,58 @@ const Sessions = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
+  const [loading, setLoading] = useState(true);
+
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+  
+  const apiCall = async (endpoint, options = {}) => {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...options.headers
+      },
+      ...options
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        navigate('/signin');
+        return;
+      }
+      throw new Error(`API call failed: ${response.statusText}`);
+    }
+
+    return await response.json();
+  };
+
+  const fetchSessions = async () => {
+    try {
+      setLoading(true);
+      const data = await apiCall('/sessions');
+      setSessions(data);
+      setFilteredSessions(data);
+    } catch (error) {
+      console.error('Error fetching sessions:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // Load sessions from localStorage
-    const savedSessions = JSON.parse(localStorage.getItem('commprep_sessions') || '[]');
-    setSessions(savedSessions);
-    setFilteredSessions(savedSessions);
+    fetchSessions();
   }, []);
 
   useEffect(() => {
-    // Filter and sort sessions
     let filtered = sessions;
 
-    // Apply type filter
     if (filterType !== 'all') {
       filtered = filtered.filter(session => 
         session.subType === filterType || session.type.toLowerCase().includes(filterType)
       );
     }
 
-    // Apply search filter
     if (searchTerm) {
       filtered = filtered.filter(session =>
         session.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -36,7 +68,6 @@ const Sessions = () => {
       );
     }
 
-    // Apply sorting
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'newest':
@@ -59,16 +90,20 @@ const Sessions = () => {
     navigate('/dashboard');
   };
 
-  const handleDeleteSession = (sessionId) => {
+  const handleDeleteSession = async (sessionId) => {
     if (window.confirm('Are you sure you want to delete this session?')) {
-      const updatedSessions = sessions.filter(session => session.id !== sessionId);
-      setSessions(updatedSessions);
-      localStorage.setItem('commprep_sessions', JSON.stringify(updatedSessions));
+      try {
+        await apiCall(`/sessions/${sessionId}`, { method: 'DELETE' });
+        const updatedSessions = sessions.filter(session => session._id !== sessionId);
+        setSessions(updatedSessions);
+        setFilteredSessions(updatedSessions);
+      } catch (error) {
+        console.error('Error deleting session:', error);
+      }
     }
   };
 
   const handleReplaySession = (session) => {
-    // Navigate to appropriate session type based on session data
     if (session.subType === 'job' || session.subType === 'visa' || session.subType === 'university') {
       navigate('/interviewee');
     } else if (session.type === 'Presentation') {
@@ -76,7 +111,7 @@ const Sessions = () => {
     } else if (session.type === 'Meeting') {
       navigate('/meeting-prep');
     } else {
-      navigate('/interviewee'); // Default to interview
+      navigate('/interviewee');
     }
   };
 
@@ -150,7 +185,7 @@ const Sessions = () => {
                 </button>
                 <button
                   onClick={() => {
-                    handleDeleteSession(session.id);
+                    handleDeleteSession(session._id);
                     setShowMenu(false);
                   }}
                   className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50"
@@ -198,9 +233,21 @@ const Sessions = () => {
     );
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+            <MessageCircle className="w-8 h-8 text-white" />
+          </div>
+          <div className="text-lg text-slate-600">Loading sessions...</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-      {/* Header */}
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-200/50 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
@@ -226,14 +273,12 @@ const Sessions = () => {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900 mb-2">All Sessions</h1>
           <p className="text-slate-600">Review and manage your practice sessions</p>
         </div>
 
-        {/* Stats Summary */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
             <div className="text-2xl font-bold text-slate-900">{sessions.length}</div>
@@ -259,10 +304,8 @@ const Sessions = () => {
           </div>
         </div>
 
-        {/* Filters and Search */}
         <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200 mb-6">
           <div className="flex flex-col md:flex-row gap-4">
-            {/* Search */}
             <div className="flex-1">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -276,7 +319,6 @@ const Sessions = () => {
               </div>
             </div>
 
-            {/* Type Filter */}
             <div>
               <select
                 value={filterType}
@@ -292,7 +334,6 @@ const Sessions = () => {
               </select>
             </div>
 
-            {/* Sort */}
             <div>
               <select
                 value={sortBy}
@@ -308,11 +349,10 @@ const Sessions = () => {
           </div>
         </div>
 
-        {/* Sessions Grid */}
         {filteredSessions.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredSessions.map((session) => (
-              <SessionCard key={session.id} session={session} />
+              <SessionCard key={session._id} session={session} />
             ))}
           </div>
         ) : (

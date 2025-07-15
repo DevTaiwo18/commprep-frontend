@@ -2,92 +2,208 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MessageCircle, Plus, Clock, TrendingUp, User, Settings, LogOut, Menu, X } from 'lucide-react';
 
-const mockStats = {
-  totalSessions: 12,
-  hourspracticed: 8.5,
-  averageScore: 85,
-  improvement: "+12%"
-};
-
-const mockRecentSessions = [
-  {
-    id: 1,
-    type: "Interview",
-    title: "Software Engineer Interview",
-    date: "2 hours ago",
-    score: 88,
-    duration: "25 min"
-  },
-  {
-    id: 2,
-    type: "Presentation",
-    title: "Product Launch Presentation",
-    date: "Yesterday",
-    score: 92,
-    duration: "18 min"
-  },
-  {
-    id: 3,
-    type: "Meeting",
-    title: "Team Standup Practice",
-    date: "2 days ago",
-    score: 79,
-    duration: "12 min"
-  }
-];
-
-const sessionTypes = [
-  {
-    id: 'interview',
-    title: 'Interview Practice',
-    description: 'Prepare for job interviews with AI-generated questions',
-    icon: <MessageCircle className="w-8 h-8" />,
-    color: 'from-blue-500 to-cyan-500',
-    bgColor: 'bg-blue-50',
-    sessions: 8
-  },
-  {
-    id: 'presentation',
-    title: 'Presentation Practice',
-    description: 'Improve your public speaking and presentation skills',
-    icon: <TrendingUp className="w-8 h-8" />,
-    color: 'from-green-500 to-emerald-500',
-    bgColor: 'bg-green-50',
-    sessions: 3
-  },
-  {
-    id: 'meeting',
-    title: 'Meeting Preparation',
-    description: 'Practice for important meetings and discussions',
-    icon: <Clock className="w-8 h-8" />,
-    color: 'from-orange-500 to-red-500',
-    bgColor: 'bg-orange-50',
-    sessions: 1
-  },
-  {
-    id: 'interviewer',
-    title: 'Interviewer Tools',
-    description: 'Create interview templates and evaluate candidates',
-    icon: <User className="w-8 h-8" />,
-    color: 'from-purple-500 to-pink-500',
-    bgColor: 'bg-purple-50',
-    sessions: 0
-  }
-];
-
 const Dashboard = () => {
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedSession, setSelectedSession] = useState(null);
   const [user, setUser] = useState(null);
+  const [stats, setStats] = useState({
+    totalSessions: 0,
+    hourspracticed: 0,
+    averageScore: 0,
+    improvement: "0%"
+  });
+  const [recentSessions, setRecentSessions] = useState([]);
+  const [sessionTypeCounts, setSessionTypeCounts] = useState({
+    interview: 0,
+    presentation: 0,
+    meeting: 0,
+    interviewer: 0
+  });
+  const [loading, setLoading] = useState(true);
+
+  const sessionTypes = [
+    {
+      id: 'interview',
+      title: 'Interview Practice',
+      description: 'Prepare for job interviews with AI-generated questions',
+      icon: <MessageCircle className="w-8 h-8" />,
+      color: 'from-blue-500 to-cyan-500',
+      bgColor: 'bg-blue-50',
+      sessions: sessionTypeCounts.interview
+    },
+    {
+      id: 'presentation',
+      title: 'Presentation Practice',
+      description: 'Improve your public speaking and presentation skills',
+      icon: <TrendingUp className="w-8 h-8" />,
+      color: 'from-green-500 to-emerald-500',
+      bgColor: 'bg-green-50',
+      sessions: sessionTypeCounts.presentation
+    },
+    {
+      id: 'meeting',
+      title: 'Meeting Preparation',
+      description: 'Practice for important meetings and discussions',
+      icon: <Clock className="w-8 h-8" />,
+      color: 'from-orange-500 to-red-500',
+      bgColor: 'bg-orange-50',
+      sessions: sessionTypeCounts.meeting
+    },
+    {
+      id: 'interviewer',
+      title: 'Interviewer Tools',
+      description: 'Create interview templates and evaluate candidates',
+      icon: <User className="w-8 h-8" />,
+      color: 'from-purple-500 to-pink-500',
+      bgColor: 'bg-purple-50',
+      sessions: sessionTypeCounts.interviewer
+    }
+  ];
+
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+  
+  const apiCall = async (endpoint, options = {}) => {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...options.headers
+      },
+      ...options
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        handleSignOut();
+        return;
+      }
+      throw new Error(`API call failed: ${response.statusText}`);
+    }
+
+    return await response.json();
+  };
+
+  const fetchUserProfile = async () => {
+    try {
+      const userData = await apiCall('/users/profile');
+      setUser(userData);
+      localStorage.setItem('user', JSON.stringify(userData));
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      const storedUser = localStorage.getItem('user') || sessionStorage.getItem('user');
+      if (storedUser) {
+        setUser(JSON.parse(storedUser));
+      } else {
+        navigate('/signin');
+      }
+    }
+  };
+
+  const fetchSessionsAndStats = async () => {
+    try {
+      const sessions = await apiCall('/sessions');
+      
+      const totalSessions = sessions.length;
+      const hoursPracticed = sessions.reduce((total, session) => {
+        const durationInHours = session.duration ? session.duration / 60 : 0;
+        return total + durationInHours;
+      }, 0);
+      
+      const averageScore = sessions.length > 0 
+        ? sessions.reduce((sum, session) => sum + (session.score || 0), 0) / sessions.length 
+        : 0;
+      
+      const improvement = calculateImprovement(sessions);
+      
+      setStats({
+        totalSessions,
+        hourspracticed: Math.round(hoursPracticed * 10) / 10,
+        averageScore: Math.round(averageScore),
+        improvement
+      });
+
+      const sortedSessions = sessions.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      const recentSessionsData = sortedSessions.slice(0, 3).map(session => ({
+        id: session.id,
+        type: session.type || 'Practice',
+        title: session.title || `${session.type} Session`,
+        date: formatDate(session.createdAt),
+        score: session.score || 0,
+        duration: `${session.duration || 0} min`
+      }));
+      
+      setRecentSessions(recentSessionsData);
+
+      const typeCounts = sessions.reduce((counts, session) => {
+        const type = session.type?.toLowerCase() || 'interview';
+        counts[type] = (counts[type] || 0) + 1;
+        return counts;
+      }, {
+        interview: 0,
+        presentation: 0,
+        meeting: 0,
+        interviewer: 0
+      });
+      
+      setSessionTypeCounts(typeCounts);
+      
+    } catch (error) {
+      console.error('Error fetching sessions:', error);
+    }
+  };
+
+  const calculateImprovement = (sessions) => {
+    if (sessions.length < 2) return "0%";
+    
+    const sortedSessions = sessions.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    const halfPoint = Math.floor(sessions.length / 2);
+    
+    const olderSessions = sortedSessions.slice(0, halfPoint);
+    const recentSessions = sortedSessions.slice(halfPoint);
+    
+    const olderAverage = olderSessions.reduce((sum, s) => sum + (s.score || 0), 0) / olderSessions.length;
+    const recentAverage = recentSessions.reduce((sum, s) => sum + (s.score || 0), 0) / recentSessions.length;
+    
+    const improvement = ((recentAverage - olderAverage) / olderAverage) * 100;
+    const sign = improvement > 0 ? '+' : '';
+    
+    return `${sign}${Math.round(improvement)}%`;
+  };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now - date);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 1) return "Today";
+    if (diffDays === 2) return "Yesterday";
+    if (diffDays <= 7) return `${diffDays - 1} days ago`;
+    
+    return date.toLocaleDateString();
+  };
 
   useEffect(() => {
-    const userData = localStorage.getItem('user') || sessionStorage.getItem('user');
-    if (userData) {
-      setUser(JSON.parse(userData));
-    } else {
-      navigate('/signin');
-    }
+    const loadData = async () => {
+      setLoading(true);
+      
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      if (!token) {
+        navigate('/signin');
+        return;
+      }
+
+      await Promise.all([
+        fetchUserProfile(),
+        fetchSessionsAndStats()
+      ]);
+      
+      setLoading(false);
+    };
+
+    loadData();
   }, [navigate]);
 
   const handleSessionSelect = (sessionType) => {
@@ -120,7 +236,7 @@ const Dashboard = () => {
     navigate('/');
   };
 
-  if (!user) {
+  if (loading || !user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="text-center">
@@ -153,10 +269,10 @@ const Dashboard = () => {
             <div className="hidden md:flex items-center space-x-4">
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold">
-                  {user.fullName[0]}
+                  {user.fullName?.[0] || user.name?.[0] || 'U'}
                 </div>
                 <div className="text-sm">
-                  <div className="font-medium text-slate-900">{user.fullName}</div>
+                  <div className="font-medium text-slate-900">{user.fullName || user.name}</div>
                   <div className="text-slate-500">Welcome back!</div>
                 </div>
               </div>
@@ -190,10 +306,10 @@ const Dashboard = () => {
             <div className="px-4 py-4 space-y-4">
               <div className="flex items-center space-x-3 pb-4 border-b border-slate-200">
                 <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold">
-                  {user.fullName[0]}
+                  {user.fullName?.[0] || user.name?.[0] || 'U'}
                 </div>
                 <div>
-                  <div className="font-medium text-slate-900">{user.fullName}</div>
+                  <div className="font-medium text-slate-900">{user.fullName || user.name}</div>
                   <div className="text-sm text-slate-500">{user.email}</div>
                 </div>
               </div>
@@ -219,7 +335,7 @@ const Dashboard = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900 mb-2">
-            Welcome back, {user.fullName.split(' ')[0]}! 👋
+            Welcome back, {(user.fullName || user.name)?.split(' ')[0]}! 👋
           </h1>
           <p className="text-slate-600">
             Ready to practice and improve your communication skills? Let's get started.
@@ -228,19 +344,21 @@ const Dashboard = () => {
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
-            <div className="text-2xl font-bold text-slate-900">{mockStats.totalSessions}</div>
+            <div className="text-2xl font-bold text-slate-900">{stats.totalSessions}</div>
             <div className="text-sm text-slate-600">Total Sessions</div>
           </div>
           <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
-            <div className="text-2xl font-bold text-slate-900">{mockStats.hourspracticed}h</div>
+            <div className="text-2xl font-bold text-slate-900">{stats.hourspracticed}h</div>
             <div className="text-sm text-slate-600">Hours Practiced</div>
           </div>
           <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
-            <div className="text-2xl font-bold text-slate-900">{mockStats.averageScore}%</div>
+            <div className="text-2xl font-bold text-slate-900">{stats.averageScore}%</div>
             <div className="text-sm text-slate-600">Average Score</div>
           </div>
           <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
-            <div className="text-2xl font-bold text-green-600">{mockStats.improvement}</div>
+            <div className={`text-2xl font-bold ${stats.improvement.startsWith('+') ? 'text-green-600' : stats.improvement.startsWith('-') ? 'text-red-600' : 'text-slate-600'}`}>
+              {stats.improvement}
+            </div>
             <div className="text-sm text-slate-600">Improvement</div>
           </div>
         </div>
@@ -280,9 +398,9 @@ const Dashboard = () => {
           </div>
           
           <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
-            {mockRecentSessions.length > 0 ? (
+            {recentSessions.length > 0 ? (
               <div className="divide-y divide-slate-200">
-                {mockRecentSessions.map((session) => (
+                {recentSessions.map((session) => (
                   <div key={session.id} className="p-6 hover:bg-slate-50 transition-colors">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-4">

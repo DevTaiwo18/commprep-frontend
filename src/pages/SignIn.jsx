@@ -48,7 +48,7 @@ const SignIn = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    e.stopPropagation(); // Add this to prevent any bubbling
+    e.stopPropagation(); 
     
     const newErrors = validateForm();
     
