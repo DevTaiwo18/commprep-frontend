@@ -6,9 +6,15 @@ const LandingPage = () => {
   const navigate = useNavigate();
   const [isVisible, setIsVisible] = useState(false);
   const [activeFeature, setActiveFeature] = useState(0);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
     setIsVisible(true);
+    
+    // Check authentication status
+    const token = localStorage.getItem('token');
+    setIsAuthenticated(!!token);
+    
     const interval = setInterval(() => {
       setActiveFeature((prev) => (prev + 1) % 4);
     }, 3000);
@@ -61,11 +67,24 @@ const LandingPage = () => {
   ];
 
   const handleGetStarted = () => {
-    navigate('/signup');
+    if (isAuthenticated) {
+      navigate('/dashboard');
+    } else {
+      navigate('/signup');
+    }
   };
 
   const handleSignIn = () => {
     navigate('/signin');
+  };
+
+  const handleDashboard = () => {
+    navigate('/dashboard');
+  };
+
+  const handleSignOut = () => {
+    localStorage.removeItem('token');
+    setIsAuthenticated(false);
   };
 
   return (
@@ -82,29 +101,58 @@ const LandingPage = () => {
                 CommPrep
               </span>
             </div>
+            
             <div className="hidden md:flex items-center space-x-4">
-              <button 
-                onClick={handleSignIn}
-                className="text-slate-600 hover:text-blue-600 transition-colors px-4 py-2 rounded-lg hover:bg-blue-50"
-              >
-                Sign In
-              </button>
-              <button 
-                onClick={handleGetStarted}
-                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-2 rounded-full hover:shadow-lg transition-all duration-300 hover:scale-105"
-              >
-                Get Started
-              </button>
+              {isAuthenticated ? (
+                <>
+                  <button 
+                    onClick={handleDashboard}
+                    className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-2 rounded-full hover:shadow-lg transition-all duration-300 hover:scale-105"
+                  >
+                    Go to Dashboard
+                  </button>
+                  <button 
+                    onClick={handleSignOut}
+                    className="text-slate-600 hover:text-red-600 transition-colors px-4 py-2 rounded-lg hover:bg-red-50"
+                  >
+                    Sign Out
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button 
+                    onClick={handleSignIn}
+                    className="text-slate-600 hover:text-blue-600 transition-colors px-4 py-2 rounded-lg hover:bg-blue-50"
+                  >
+                    Sign In
+                  </button>
+                  <button 
+                    onClick={handleGetStarted}
+                    className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-2 rounded-full hover:shadow-lg transition-all duration-300 hover:scale-105"
+                  >
+                    Get Started
+                  </button>
+                </>
+              )}
             </div>
             
             {/* Mobile Menu */}
             <div className="md:hidden">
-              <button 
-                onClick={handleGetStarted}
-                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-5 py-2 rounded-full text-sm hover:shadow-lg transition-all duration-300"
-              >
-                Get Started
-              </button>
+              {isAuthenticated ? (
+                <button 
+                  onClick={handleDashboard}
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-5 py-2 rounded-full text-sm hover:shadow-lg transition-all duration-300"
+                >
+                  Dashboard
+                </button>
+              ) : (
+                <button 
+                  onClick={handleGetStarted}
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-5 py-2 rounded-full text-sm hover:shadow-lg transition-all duration-300"
+                >
+                  Get Started
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -135,17 +183,26 @@ const LandingPage = () => {
                   onClick={handleGetStarted}
                   className="group bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-full font-semibold hover:shadow-xl transition-all duration-300 hover:scale-105 flex items-center justify-center text-sm sm:text-base"
                 >
-                  Start Practicing Free
+                  {isAuthenticated ? 'Go to Dashboard' : 'Start Practicing Free'}
                   <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 ml-2 group-hover:translate-x-1 transition-transform" />
                 </button>
                 
-                {/* Mobile Sign In Button */}
-                <button 
-                  onClick={handleSignIn}
-                  className="md:hidden text-slate-600 hover:text-blue-600 transition-colors font-medium text-sm"
-                >
-                  Already have an account? Sign In
-                </button>
+                {/* Mobile Sign In Button or Sign Out */}
+                {isAuthenticated ? (
+                  <button 
+                    onClick={handleSignOut}
+                    className="md:hidden text-slate-600 hover:text-red-600 transition-colors font-medium text-sm"
+                  >
+                    Sign Out
+                  </button>
+                ) : (
+                  <button 
+                    onClick={handleSignIn}
+                    className="md:hidden text-slate-600 hover:text-blue-600 transition-colors font-medium text-sm"
+                  >
+                    Already have an account? Sign In
+                  </button>
+                )}
               </div>
             </div>
             
@@ -291,8 +348,15 @@ const LandingPage = () => {
                   </div>
                   <div className="absolute -inset-4 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 </div>
-                <h3 className="text-xl font-semibold text-slate-900 mb-3">Create Your Account</h3>
-                <p className="text-slate-600 leading-relaxed">Sign up in seconds and get instant access to all practice modes</p>
+                <h3 className="text-xl font-semibold text-slate-900 mb-3">
+                  {isAuthenticated ? 'Access Your Dashboard' : 'Create Your Account'}
+                </h3>
+                <p className="text-slate-600 leading-relaxed">
+                  {isAuthenticated 
+                    ? 'You\'re already signed in! Go to your dashboard to start practicing'
+                    : 'Sign up in seconds and get instant access to all practice modes'
+                  }
+                </p>
               </div>
               
               <div className="text-center group">
@@ -325,24 +389,36 @@ const LandingPage = () => {
       <section className="py-20 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-4xl font-bold text-white mb-6">
-            Ready to Build Your Communication Confidence?
+            {isAuthenticated ? 'Continue Your Communication Journey' : 'Ready to Build Your Communication Confidence?'}
           </h2>
           <p className="text-xl text-blue-100 mb-8 leading-relaxed">
-            Join CommPrep today and start practicing for your next big opportunity. It's free to get started!
+            {isAuthenticated 
+              ? 'Welcome back! Access your dashboard to continue practicing and improving your communication skills.'
+              : 'Join CommPrep today and start practicing for your next big opportunity. It\'s free to get started!'
+            }
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button 
               onClick={handleGetStarted}
               className="bg-white text-blue-600 px-8 py-4 rounded-full font-semibold hover:bg-blue-50 transition-all duration-300 hover:scale-105 shadow-lg"
             >
-              Get Started Free
+              {isAuthenticated ? 'Go to Dashboard' : 'Get Started Free'}
             </button>
-            <button 
-              onClick={handleSignIn}
-              className="bg-transparent border-2 border-white text-white px-8 py-4 rounded-full font-semibold hover:bg-white hover:text-blue-600 transition-all duration-300"
-            >
-              Sign In
-            </button>
+            {isAuthenticated ? (
+              <button 
+                onClick={handleSignOut}
+                className="bg-transparent border-2 border-white text-white px-8 py-4 rounded-full font-semibold hover:bg-white hover:text-blue-600 transition-all duration-300"
+              >
+                Sign Out
+              </button>
+            ) : (
+              <button 
+                onClick={handleSignIn}
+                className="bg-transparent border-2 border-white text-white px-8 py-4 rounded-full font-semibold hover:bg-white hover:text-blue-600 transition-all duration-300"
+              >
+                Sign In
+              </button>
+            )}
           </div>
         </div>
       </section>
