@@ -62,22 +62,11 @@ const Settings = () => {
     fetchUserProfile();
   }, [navigate]);
 
-  const validateEmail = (email) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
-
   const validateProfile = () => {
     const newErrors = {};
     
     if (!profile.fullName.trim()) {
       newErrors.fullName = 'Full name is required';
-    }
-    
-    if (!profile.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!validateEmail(profile.email)) {
-      newErrors.email = 'Please enter a valid email address';
     }
     
     setErrors(newErrors);
@@ -112,9 +101,10 @@ const Settings = () => {
     setSaveSuccess(false);
     
     try {
+      // Only send the fullName to the API since email is not editable
       await apiCall('/users/profile', {
         method: 'PUT',
-        body: JSON.stringify(profile)
+        body: JSON.stringify({ fullName: profile.fullName })
       });
 
       setSaveSuccess(true);
@@ -251,23 +241,13 @@ const Settings = () => {
               <input
                 type="email"
                 value={profile.email}
-                onChange={(e) => handleInputChange('email', e.target.value)}
-                disabled={!isEditing}
-                className={`w-full px-4 py-3 border rounded-lg transition-colors ${
-                  isEditing
-                    ? errors.email
-                      ? 'border-red-500 focus:ring-2 focus:ring-red-500 focus:border-transparent'
-                      : 'border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent'
-                    : 'border-slate-200 bg-slate-50'
-                } ${!isEditing ? 'cursor-not-allowed' : ''}`}
+                disabled={true}
+                className="w-full px-4 py-3 border border-slate-200 bg-slate-50 rounded-lg cursor-not-allowed"
                 placeholder="Enter your email address"
               />
-              {errors.email && (
-                <p className="mt-1 text-sm text-red-600 flex items-center">
-                  <AlertCircle className="w-4 h-4 mr-1" />
-                  {errors.email}
-                </p>
-              )}
+              <p className="mt-1 text-sm text-slate-500">
+                Email address cannot be changed
+              </p>
             </div>
           </div>
 
