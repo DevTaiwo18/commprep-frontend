@@ -1,46 +1,36 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageCircle, ArrowLeft, Filter, Search, Calendar, Clock, TrendingUp, MoreVertical, Play, Trash2 } from 'lucide-react';
+import { MessageCircle, ArrowLeft, Search, Calendar, Clock, TrendingUp, Trash2 } from 'lucide-react';
 
 const Sessions = () => {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState([]);
   const [filteredSessions, setFilteredSessions] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
   const [loading, setLoading] = useState(true);
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-  
-  const apiCall = async (endpoint, options = {}) => {
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        ...options.headers
-      },
-      ...options
-    });
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        navigate('/signin');
-        return;
-      }
-      throw new Error(`API call failed: ${response.statusText}`);
-    }
-
-    return await response.json();
-  };
 
   const fetchSessions = async () => {
     try {
-      setLoading(true);
-      const data = await apiCall('/sessions');
-      setSessions(data);
-      setFilteredSessions(data);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        navigate('/signin');
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/sessions`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSessions(data);
+        setFilteredSessions(data);
+      }
     } catch (error) {
       console.error('Error fetching sessions:', error);
     } finally {
@@ -53,47 +43,26 @@ const Sessions = () => {
   }, []);
 
   useEffect(() => {
-    let filtered = sessions;
-
-    if (filterType !== 'all') {
-      filtered = filtered.filter(session => 
-        session.subType === filterType || session.type.toLowerCase().includes(filterType)
-      );
-    }
-
     if (searchTerm) {
-      filtered = filtered.filter(session =>
-        session.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        session.type.toLowerCase().includes(searchTerm.toLowerCase())
+      const filtered = sessions.filter(session =>
+        session.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        session.type?.toLowerCase().includes(searchTerm.toLowerCase())
       );
+      setFilteredSessions(filtered);
+    } else {
+      setFilteredSessions(sessions);
     }
-
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'newest':
-          return new Date(b.createdAt) - new Date(a.createdAt);
-        case 'oldest':
-          return new Date(a.createdAt) - new Date(b.createdAt);
-        case 'score':
-          return (b.score || 0) - (a.score || 0);
-        case 'duration':
-          return (b.duration || 0) - (a.duration || 0);
-        default:
-          return 0;
-      }
-    });
-
-    setFilteredSessions(filtered);
-  }, [sessions, searchTerm, filterType, sortBy]);
-
-  const handleBackToDashboard = () => {
-    navigate('/dashboard');
-  };
+  }, [sessions, searchTerm]);
 
   const handleDeleteSession = async (sessionId) => {
     if (window.confirm('Are you sure you want to delete this session?')) {
       try {
-        await apiCall(`/sessions/${sessionId}`, { method: 'DELETE' });
+        const token = localStorage.getItem('token');
+        await fetch(`${API_BASE_URL}/sessions/${sessionId}`, { 
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
         const updatedSessions = sessions.filter(session => session._id !== sessionId);
         setSessions(updatedSessions);
         setFilteredSessions(updatedSessions);
@@ -103,31 +72,12 @@ const Sessions = () => {
     }
   };
 
-  const handleReplaySession = (session) => {
-    if (session.subType === 'job' || session.subType === 'visa' || session.subType === 'university') {
-      navigate('/interviewee');
-    } else if (session.type === 'Presentation') {
-      navigate('/presenter');
-    } else if (session.type === 'Meeting') {
-      navigate('/meeting-prep');
-    } else {
-      navigate('/interviewee');
-    }
-  };
-
   const getSessionIcon = (type) => {
-    switch (type.toLowerCase()) {
-      case 'interview':
-      case 'job':
-      case 'visa':
-      case 'university':
-        return '💼';
-      case 'presentation':
-        return '📊';
-      case 'meeting':
-        return '🤝';
-      default:
-        return '📝';
+    switch (type?.toLowerCase()) {
+      case 'interview': return '💼';
+      case 'presentation': return '📊';
+      case 'meeting': return '🤝';
+      default: return '📝';
     }
   };
 
@@ -147,91 +97,18 @@ const Sessions = () => {
     });
   };
 
-  const SessionCard = ({ session }) => {
-    const [showMenu, setShowMenu] = useState(false);
-
-    return (
-      <div className="bg-white rounded-lg border border-slate-200 p-6 hover:shadow-md transition-shadow">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center space-x-3">
-            <div className="text-2xl">{getSessionIcon(session.subType || session.type)}</div>
-            <div>
-              <h3 className="font-semibold text-slate-900">{session.title}</h3>
-              <p className="text-sm text-slate-600">
-                {session.subType?.charAt(0).toUpperCase() + session.subType?.slice(1) || session.type} Session
-              </p>
-            </div>
-          </div>
-          
-          <div className="relative">
-            <button
-              onClick={() => setShowMenu(!showMenu)}
-              className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
-            >
-              <MoreVertical className="w-4 h-4" />
-            </button>
-            
-            {showMenu && (
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 z-10">
-                <button
-                  onClick={() => {
-                    handleReplaySession(session);
-                    setShowMenu(false);
-                  }}
-                  className="flex items-center w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                >
-                  <Play className="w-4 h-4 mr-2" />
-                  Replay Session
-                </button>
-                <button
-                  onClick={() => {
-                    handleDeleteSession(session._id);
-                    setShowMenu(false);
-                  }}
-                  className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Delete Session
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-4 mb-4">
-          <div className="text-center">
-            <div className={`text-lg font-semibold ${getScoreColor(session.score)}`}>
-              {session.score || 0}%
-            </div>
-            <div className="text-xs text-slate-500">Score</div>
-          </div>
-          <div className="text-center">
-            <div className="text-lg font-semibold text-slate-900">
-              {session.duration || 0}m
-            </div>
-            <div className="text-xs text-slate-500">Duration</div>
-          </div>
-          <div className="text-center">
-            <div className="text-lg font-semibold text-slate-900">
-              {session.questions?.length || 0}
-            </div>
-            <div className="text-xs text-slate-500">Questions</div>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between text-sm text-slate-500">
-          <div className="flex items-center">
-            <Calendar className="w-4 h-4 mr-1" />
-            {formatDate(session.createdAt)}
-          </div>
-          <div className="flex items-center">
-            <Clock className="w-4 h-4 mr-1" />
-            {session.date}
-          </div>
-        </div>
-      </div>
-    );
+  const formatTime = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-US', { 
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
+
+  const totalMinutes = sessions.reduce((acc, s) => acc + (s.duration || 0), 0);
+  const totalHours = totalMinutes >= 60 ? 
+    Math.round(totalMinutes / 60 * 10) / 10 : 
+    Math.round(totalMinutes * 10) / 10;
 
   if (loading) {
     return (
@@ -255,124 +132,193 @@ const Sessions = () => {
               <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
                 <MessageCircle className="w-6 h-6 text-white" />
               </div>
-              <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <span className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                 CommPrep
               </span>
             </div>
             
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={handleBackToDashboard}
-                className="flex items-center text-slate-600 hover:text-blue-600 transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5 mr-2" />
-                Back to Dashboard
-              </button>
-            </div>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="flex items-center text-slate-600 hover:text-blue-600 transition-colors text-sm sm:text-base"
+            >
+              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">Back to Dashboard</span>
+              <span className="sm:hidden">Back</span>
+            </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">All Sessions</h1>
-          <p className="text-slate-600">Review and manage your practice sessions</p>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-2">All Sessions</h1>
+          <p className="text-slate-600 text-sm sm:text-base">Review your practice sessions</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
-            <div className="text-2xl font-bold text-slate-900">{sessions.length}</div>
-            <div className="text-sm text-slate-600">Total Sessions</div>
+        {/* Stats Grid - Responsive */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+          <div className="bg-white rounded-lg p-4 sm:p-6 shadow-sm border border-slate-200 text-center">
+            <div className="text-xl sm:text-2xl font-bold text-slate-900">{sessions.length}</div>
+            <div className="text-xs sm:text-sm text-slate-600">Total Sessions</div>
           </div>
-          <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
-            <div className="text-2xl font-bold text-slate-900">
-              {Math.round(sessions.reduce((acc, s) => acc + (s.score || 0), 0) / (sessions.length || 1))}%
+          <div className="bg-white rounded-lg p-4 sm:p-6 shadow-sm border border-slate-200 text-center">
+            <div className="text-xl sm:text-2xl font-bold text-slate-900">
+              {totalMinutes >= 60 ? `${totalHours}h` : `${totalHours}m`}
             </div>
-            <div className="text-sm text-slate-600">Average Score</div>
+            <div className="text-xs sm:text-sm text-slate-600">Total Practice Time</div>
           </div>
-          <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
-            <div className="text-2xl font-bold text-slate-900">
-              {Math.round(sessions.reduce((acc, s) => acc + (s.duration || 0), 0) / 60)}h
-            </div>
-            <div className="text-sm text-slate-600">Total Practice</div>
-          </div>
-          <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
-            <div className="text-2xl font-bold text-green-600">
+          <div className="bg-white rounded-lg p-4 sm:p-6 shadow-sm border border-slate-200 text-center">
+            <div className="text-xl sm:text-2xl font-bold text-green-600">
               {sessions.filter(s => (s.score || 0) >= 80).length}
             </div>
-            <div className="text-sm text-slate-600">High Scores (80+)</div>
+            <div className="text-xs sm:text-sm text-slate-600">High Scores (80+)</div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200 mb-6">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search sessions..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-
-            <div>
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="all">All Types</option>
-                <option value="job">Job Interviews</option>
-                <option value="visa">Visa Interviews</option>
-                <option value="university">University Interviews</option>
-                <option value="presentation">Presentations</option>
-                <option value="meeting">Meetings</option>
-              </select>
-            </div>
-
-            <div>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="newest">Newest First</option>
-                <option value="oldest">Oldest First</option>
-                <option value="score">Highest Score</option>
-                <option value="duration">Longest Duration</option>
-              </select>
-            </div>
+        {/* Search Bar */}
+        <div className="bg-white rounded-lg p-4 sm:p-6 shadow-sm border border-slate-200 mb-4 sm:mb-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search sessions..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
+            />
           </div>
         </div>
 
+        {/* Sessions List */}
         {filteredSessions.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredSessions.map((session) => (
-              <SessionCard key={session._id} session={session} />
+          <div className="space-y-4">
+            {filteredSessions
+              .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+              .map((session) => (
+              <div key={session._id} className="bg-white rounded-lg border border-slate-200 p-4 sm:p-6 hover:shadow-md transition-shadow">
+                {/* Mobile Layout */}
+                <div className="block sm:hidden">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center space-x-3">
+                      <div className="text-xl sm:text-2xl">{getSessionIcon(session.type)}</div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-slate-900 text-sm truncate">{session.title}</h3>
+                        <div className="flex items-center space-x-3 text-xs text-slate-600 mt-1">
+                          <div className="flex items-center">
+                            <Calendar className="w-3 h-3 mr-1" />
+                            {formatDate(session.createdAt)}
+                          </div>
+                          <div className="flex items-center">
+                            <Clock className="w-3 h-3 mr-1" />
+                            {formatTime(session.createdAt)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteSession(session._id)}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  
+                  <div className="grid grid-cols-3 gap-4 pt-3 border-t border-slate-100">
+                    <div className="text-center">
+                      <div className={`text-lg font-semibold ${getScoreColor(session.score || 0)}`}>
+                        {session.score || 0}%
+                      </div>
+                      <div className="text-xs text-slate-500">Score</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-lg font-semibold text-slate-900">
+                        {session.duration || 0}m
+                      </div>
+                      <div className="text-xs text-slate-500">Duration</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-lg font-semibold text-slate-900">
+                        {session.questions?.length || 0}
+                      </div>
+                      <div className="text-xs text-slate-500">Questions</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Desktop Layout */}
+                <div className="hidden sm:flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <div className="text-2xl">{getSessionIcon(session.type)}</div>
+                    <div>
+                      <h3 className="font-semibold text-slate-900">{session.title}</h3>
+                      <div className="flex items-center space-x-4 text-sm text-slate-600">
+                        <div className="flex items-center">
+                          <Calendar className="w-4 h-4 mr-1" />
+                          {formatDate(session.createdAt)}
+                        </div>
+                        <div className="flex items-center">
+                          <Clock className="w-4 h-4 mr-1" />
+                          {formatTime(session.createdAt)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-6">
+                    <div className="text-center">
+                      <div className={`text-lg font-semibold ${getScoreColor(session.score || 0)}`}>
+                        {session.score || 0}%
+                      </div>
+                      <div className="text-xs text-slate-500">Score</div>
+                    </div>
+                    
+                    <div className="text-center">
+                      <div className="text-lg font-semibold text-slate-900">
+                        {session.duration || 0}m
+                      </div>
+                      <div className="text-xs text-slate-500">Duration</div>
+                    </div>
+
+                    <div className="text-center">
+                      <div className="text-lg font-semibold text-slate-900">
+                        {session.questions?.length || 0}
+                      </div>
+                      <div className="text-xs text-slate-500">Questions</div>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => handleDeleteSession(session._id)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
         ) : (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <TrendingUp className="w-8 h-8 text-slate-400" />
+          <div className="text-center py-8 sm:py-12">
+            <div className="w-12 h-12 sm:w-16 sm:h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8 text-slate-400" />
             </div>
             <h3 className="text-lg font-medium text-slate-900 mb-2">
-              {searchTerm || filterType !== 'all' ? 'No sessions found' : 'No sessions yet'}
+              {searchTerm ? 'No sessions found' : 'No sessions yet'}
             </h3>
-            <p className="text-slate-600 mb-6">
-              {searchTerm || filterType !== 'all' 
-                ? 'Try adjusting your search or filter criteria'
+            <p className="text-slate-600 mb-6 text-sm sm:text-base px-4">
+              {searchTerm 
+                ? 'Try a different search term'
                 : 'Start your first practice session to see your progress here'
               }
             </p>
-            {(!searchTerm && filterType === 'all') && (
+            {!searchTerm && (
               <button
-                onClick={handleBackToDashboard}
-                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all duration-300"
+                onClick={() => navigate('/dashboard')}
+                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold hover:shadow-lg transition-all duration-300 text-sm sm:text-base"
               >
                 Start First Session
               </button>
